@@ -14,11 +14,13 @@ import * as XLSX from "xlsx"
 interface Person {
   name: string
   gender: "male" | "female"
+  class: string
+  department: string
 }
 
 interface Pair {
-  male: string
-  female: string
+  male: Person
+  female: Person
 }
 
 export default function RandomPairGenerator() {
@@ -41,11 +43,13 @@ export default function RandomPairGenerator() {
 
           const peopleList: Person[] = []
           jsonData.forEach((row: any) => {
-            if (row.length >= 2 && row[0] && row[1]) {
+            if (row.length >= 4 && row[0] && row[1] && row[2] && row[3]) {
               const name = String(row[0]).trim()
               const gender = String(row[1]).toLowerCase().trim()
-              if (name && (gender === "male" || gender === "female")) {
-                peopleList.push({ name, gender })
+              const classValue = String(row[2]).trim()
+              const department = String(row[3]).trim()
+              if (name && (gender === "male" || gender === "female") && classValue && department) {
+                peopleList.push({ name, gender, class: classValue, department })
               }
             }
           })
@@ -65,11 +69,13 @@ export default function RandomPairGenerator() {
         complete: (results) => {
           const peopleList: Person[] = []
           results.data.forEach((row: any) => {
-            if (Array.isArray(row) && row.length >= 2) {
+            if (Array.isArray(row) && row.length >= 4) {
               const name = String(row[0]).trim()
               const gender = String(row[1]).toLowerCase().trim()
-              if (name && (gender === "male" || gender === "female")) {
-                peopleList.push({ name, gender })
+              const classValue = String(row[2]).trim()
+              const department = String(row[3]).trim()
+              if (name && (gender === "male" || gender === "female") && classValue && department) {
+                peopleList.push({ name, gender, class: classValue, department })
               }
             }
           })
@@ -145,22 +151,58 @@ export default function RandomPairGenerator() {
 
     const newPairs: Pair[] = []
     const newUnpaired: Person[] = []
+    const usedMales = new Set<number>()
+    const usedFemales = new Set<number>()
 
-    // Create pairs
-    const minLength = Math.min(shuffledMales.length, shuffledFemales.length)
-    for (let i = 0; i < minLength; i++) {
-      newPairs.push({
-        male: shuffledMales[i].name,
-        female: shuffledFemales[i].name,
-      })
+    // Smart pairing algorithm: prioritize different class/department combinations
+    for (let i = 0; i < shuffledMales.length; i++) {
+      if (usedMales.has(i)) continue
+
+      const male = shuffledMales[i]
+      let bestFemaleIndex = -1
+      let bestScore = -1
+
+      // Find the best female match
+      for (let j = 0; j < shuffledFemales.length; j++) {
+        if (usedFemales.has(j)) continue
+
+        const female = shuffledFemales[j]
+        let score = 0
+
+        // Higher score for different class and department
+        if (male.class !== female.class) score += 2
+        if (male.department !== female.department) score += 2
+
+        // Add some randomness to avoid deterministic pairing
+        score += Math.random()
+
+        if (score > bestScore) {
+          bestScore = score
+          bestFemaleIndex = j
+        }
+      }
+
+      // If we found a female match, create the pair
+      if (bestFemaleIndex !== -1) {
+        newPairs.push({
+          male: male,
+          female: shuffledFemales[bestFemaleIndex],
+        })
+        usedMales.add(i)
+        usedFemales.add(bestFemaleIndex)
+      }
     }
 
     // Add unpaired people
-    if (shuffledMales.length > minLength) {
-      newUnpaired.push(...shuffledMales.slice(minLength))
+    for (let i = 0; i < shuffledMales.length; i++) {
+      if (!usedMales.has(i)) {
+        newUnpaired.push(shuffledMales[i])
+      }
     }
-    if (shuffledFemales.length > minLength) {
-      newUnpaired.push(...shuffledFemales.slice(minLength))
+    for (let j = 0; j < shuffledFemales.length; j++) {
+      if (!usedFemales.has(j)) {
+        newUnpaired.push(shuffledFemales[j])
+      }
     }
 
     setPairs(newPairs)
@@ -186,7 +228,8 @@ export default function RandomPairGenerator() {
             Random Pair Generator
           </CardTitle>
           <p className="text-card-foreground text-lg">
-            Upload a CSV or Excel file with names and genders to generate male-female pairs
+            Upload a CSV or Excel file with names, genders, classes, and departments to generate optimized male-female
+            pairs
           </p>
         </CardHeader>
 
@@ -218,7 +261,7 @@ export default function RandomPairGenerator() {
                   />
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Upload a CSV or Excel file with two columns: Name, Gender (male/female)
+                  Upload a CSV or Excel file with four columns: Name, Gender (male/female), Class, Department
                 </p>
               </div>
             </div>
@@ -231,11 +274,15 @@ export default function RandomPairGenerator() {
                 <div className="max-h-32 overflow-y-auto">
                   <div className="grid grid-cols-1 gap-1 text-sm text-muted-foreground">
                     {people.map((person, index) => (
-                      <div key={index} className="flex justify-between">
+                      <div key={index} className="flex justify-between items-center">
                         <span>{person.name}</span>
-                        <span className={person.gender === "male" ? "text-blue-600" : "text-pink-600"}>
-                          {person.gender}
-                        </span>
+                        <div className="flex gap-2 text-xs">
+                          <span className={person.gender === "male" ? "text-blue-600" : "text-pink-600"}>
+                            {person.gender}
+                          </span>
+                          <span className="text-gray-600">{person.class}</span>
+                          <span className="text-gray-500">{person.department}</span>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -250,7 +297,7 @@ export default function RandomPairGenerator() {
                   disabled={maleCount === 0 || femaleCount === 0}
                 >
                   <Shuffle className="h-5 w-5 mr-2" />
-                  Generate Male-Female Pairs
+                  Generate Smart Pairs
                 </Button>
                 <Button
                   onClick={resetApp}
@@ -268,10 +315,21 @@ export default function RandomPairGenerator() {
                     {pairs.map((pair, index) => (
                       <div key={index} className="bg-background rounded-md p-3 border border-border">
                         <div className="flex items-center justify-center">
-                          <span className="text-card-foreground font-medium">
-                            <span className="text-blue-600">{pair.male}</span> &{" "}
-                            <span className="text-pink-600">{pair.female}</span>
-                          </span>
+                          <div className="text-center">
+                            <div className="font-medium mb-1">
+                              <span className="text-blue-600">{pair.male.name}</span> &{" "}
+                              <span className="text-pink-600">{pair.female.name}</span>
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              <span className="text-blue-500">
+                                {pair.male.class} - {pair.male.department}
+                              </span>
+                              {" | "}
+                              <span className="text-pink-500">
+                                {pair.female.class} - {pair.female.department}
+                              </span>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -285,9 +343,12 @@ export default function RandomPairGenerator() {
                   <div className="space-y-2">
                     {unpaired.map((person, index) => (
                       <div key={index} className="bg-background rounded-md p-2 border border-border text-center">
-                        <span className={`font-medium ${person.gender === "male" ? "text-blue-600" : "text-pink-600"}`}>
+                        <div className={`font-medium ${person.gender === "male" ? "text-blue-600" : "text-pink-600"}`}>
                           {person.name} ({person.gender})
-                        </span>
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {person.class} - {person.department}
+                        </div>
                       </div>
                     ))}
                   </div>
