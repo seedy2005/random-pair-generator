@@ -16,6 +16,8 @@ interface Person {
   gender: "male" | "female"
   class: string
   department: string
+  year: string
+  minor: "yes" | "no"
 }
 
 interface Pair {
@@ -43,13 +45,22 @@ export default function RandomPairGenerator() {
 
           const peopleList: Person[] = []
           jsonData.forEach((row: any) => {
-            if (row.length >= 4 && row[0] && row[1] && row[2] && row[3]) {
+            if (row.length >= 6 && row[0] && row[1] && row[2] && row[3] && row[4] && row[5]) {
               const name = String(row[0]).trim()
               const gender = String(row[1]).toLowerCase().trim()
               const classValue = String(row[2]).trim()
               const department = String(row[3]).trim()
-              if (name && (gender === "male" || gender === "female") && classValue && department) {
-                peopleList.push({ name, gender, class: classValue, department })
+              const year = String(row[4]).trim()
+              const minor = String(row[5]).toLowerCase().trim()
+              if (
+                name &&
+                (gender === "male" || gender === "female") &&
+                classValue &&
+                department &&
+                year &&
+                (minor === "yes" || minor === "no")
+              ) {
+                peopleList.push({ name, gender, class: classValue, department, year, minor })
               }
             }
           })
@@ -69,13 +80,22 @@ export default function RandomPairGenerator() {
         complete: (results) => {
           const peopleList: Person[] = []
           results.data.forEach((row: any) => {
-            if (Array.isArray(row) && row.length >= 4) {
+            if (Array.isArray(row) && row.length >= 6) {
               const name = String(row[0]).trim()
               const gender = String(row[1]).toLowerCase().trim()
               const classValue = String(row[2]).trim()
               const department = String(row[3]).trim()
-              if (name && (gender === "male" || gender === "female") && classValue && department) {
-                peopleList.push({ name, gender, class: classValue, department })
+              const year = String(row[4]).trim()
+              const minor = String(row[5]).toLowerCase().trim()
+              if (
+                name &&
+                (gender === "male" || gender === "female") &&
+                classValue &&
+                department &&
+                year &&
+                (minor === "yes" || minor === "no")
+              ) {
+                peopleList.push({ name, gender, class: classValue, department, year, minor })
               }
             }
           })
@@ -145,7 +165,7 @@ export default function RandomPairGenerator() {
     const males = people.filter((person) => person.gender === "male")
     const females = people.filter((person) => person.gender === "female")
 
-    // Shuffle both arrays
+    // Shuffle both arrays for randomness
     const shuffledMales = [...males].sort(() => Math.random() - 0.5)
     const shuffledFemales = [...females].sort(() => Math.random() - 0.5)
 
@@ -154,7 +174,7 @@ export default function RandomPairGenerator() {
     const usedMales = new Set<number>()
     const usedFemales = new Set<number>()
 
-    // Smart pairing algorithm: prioritize different class/department combinations
+    // Advanced pairing algorithm with prioritized constraints
     for (let i = 0; i < shuffledMales.length; i++) {
       if (usedMales.has(i)) continue
 
@@ -162,19 +182,33 @@ export default function RandomPairGenerator() {
       let bestFemaleIndex = -1
       let bestScore = -1
 
-      // Find the best female match
+      // Find the best female match based on prioritized constraints
       for (let j = 0; j < shuffledFemales.length; j++) {
         if (usedFemales.has(j)) continue
 
         const female = shuffledFemales[j]
         let score = 0
 
-        // Higher score for different class and department
-        if (male.class !== female.class) score += 2
-        if (male.department !== female.department) score += 2
+        // Priority 1: Opposite gender (already guaranteed by filtering)
+        // This is automatically satisfied since we're pairing males with females
 
-        // Add some randomness to avoid deterministic pairing
-        score += Math.random()
+        // Priority 2: Different department (highest weight)
+        if (male.department !== female.department) score += 100
+
+        // Priority 3: Different year (medium-high weight)
+        if (male.year !== female.year) score += 50
+
+        // Priority 4: Minor constraint (medium weight)
+        // If one has "yes" for minor, the other should have "no"
+        if ((male.minor === "yes" && female.minor === "no") || (male.minor === "no" && female.minor === "yes")) {
+          score += 25
+        }
+
+        // Bonus: Different class (lower weight since it's not in the main priorities)
+        if (male.class !== female.class) score += 10
+
+        // Add small random factor to break ties
+        score += Math.random() * 5
 
         if (score > bestScore) {
           bestScore = score
@@ -228,8 +262,8 @@ export default function RandomPairGenerator() {
             Random Pair Generator
           </CardTitle>
           <p className="text-card-foreground text-lg">
-            Upload a CSV or Excel file with names, genders, classes, and departments to generate optimized male-female
-            pairs
+            Upload a CSV or Excel file with candidate details to generate optimized male-female pairs based on
+            prioritized constraints
           </p>
         </CardHeader>
 
@@ -260,9 +294,18 @@ export default function RandomPairGenerator() {
                     className="bg-input border-border cursor-pointer"
                   />
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  Upload a CSV or Excel file with four columns: Name, Gender (male/female), Class, Department
-                </p>
+                <div className="text-sm text-muted-foreground space-y-2">
+                  <p>Upload a CSV or Excel file with six columns: Name, Gender, Class, Department, Year, Minor</p>
+                  <div className="bg-muted p-3 rounded-md">
+                    <p className="font-medium mb-2">Pairing Priorities:</p>
+                    <ol className="list-decimal list-inside space-y-1 text-xs">
+                      <li>Opposite gender (male-female pairs)</li>
+                      <li>Different department</li>
+                      <li>Different year</li>
+                      <li>Complementary minor status (one yes, one no)</li>
+                    </ol>
+                  </div>
+                </div>
               </div>
             </div>
           ) : (
@@ -282,6 +325,10 @@ export default function RandomPairGenerator() {
                           </span>
                           <span className="text-gray-600">{person.class}</span>
                           <span className="text-gray-500">{person.department}</span>
+                          <span className="text-purple-600">Y{person.year}</span>
+                          <span className={`${person.minor === "yes" ? "text-orange-600" : "text-green-600"}`}>
+                            Minor: {person.minor}
+                          </span>
                         </div>
                       </div>
                     ))}
@@ -297,7 +344,7 @@ export default function RandomPairGenerator() {
                   disabled={maleCount === 0 || femaleCount === 0}
                 >
                   <Shuffle className="h-5 w-5 mr-2" />
-                  Generate Smart Pairs
+                  Generate Optimized Pairs
                 </Button>
                 <Button
                   onClick={resetApp}
@@ -320,14 +367,19 @@ export default function RandomPairGenerator() {
                               <span className="text-blue-600">{pair.male.name}</span> &{" "}
                               <span className="text-pink-600">{pair.female.name}</span>
                             </div>
-                            <div className="text-xs text-muted-foreground">
-                              <span className="text-blue-500">
-                                {pair.male.class} - {pair.male.department}
-                              </span>
-                              {" | "}
-                              <span className="text-pink-500">
-                                {pair.female.class} - {pair.female.department}
-                              </span>
+                            <div className="text-xs text-muted-foreground space-y-1">
+                              <div>
+                                <span className="text-blue-500">
+                                  {pair.male.class} - {pair.male.department} - Y{pair.male.year} - Minor:{" "}
+                                  {pair.male.minor}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-pink-500">
+                                  {pair.female.class} - {pair.female.department} - Y{pair.female.year} - Minor:{" "}
+                                  {pair.female.minor}
+                                </span>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -347,7 +399,7 @@ export default function RandomPairGenerator() {
                           {person.name} ({person.gender})
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {person.class} - {person.department}
+                          {person.class} - {person.department} - Y{person.year} - Minor: {person.minor}
                         </div>
                       </div>
                     ))}
